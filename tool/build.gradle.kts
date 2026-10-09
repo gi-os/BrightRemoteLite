@@ -76,6 +76,8 @@ kotlin {
 dependencies {
     implementation(project(":sdk:client"))
     testImplementation(libs.kotlin.test)
+    // Test only: an independent implementation to cross-check the tool's own crypto against.
+    testImplementation(libs.bouncycastle.provider)
     ksp(libs.androidx.room.compiler)
 }
 

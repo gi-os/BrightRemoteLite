@@ -1,10 +1,11 @@
 [tool]
-id = "com.thelightphone.app"
-label = "Light SDK Tool"
+id = "com.gios.brightremotelite"
+label = "BrightRemote Lite"
 versionCode = 1
-versionName = "1.0.0"
-permissions = ["android.permission.INTERNET"]
+versionName = "0.1.0"
+permissions = ["android.permission.INTERNET", "android.permission.ACCESS_NETWORK_STATE"]
 capabilities = []
+orientation = "portrait"
 # for the LightOS emulator, use the line below and build with -DlightSdk.allowAltServerPackage=true
 # serverPackage = "com.thelightphone.sdk.emulator"
 serverPackage = "com.lightos"
