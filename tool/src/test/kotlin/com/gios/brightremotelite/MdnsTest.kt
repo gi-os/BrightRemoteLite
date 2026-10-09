@@ -87,9 +87,9 @@ class MdnsTest {
         val q = Mdns.query(0x1234, listOf(Mdns.Question(DeviceAssembler.SERVICE, Mdns.TYPE_PTR)))
         val expected = byteArrayOf(
             0x12, 0x34, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
-            15, *"_companion-link".toByteArray().toTypedArray(),
-            4, *"_tcp".toByteArray().toTypedArray(),
-            5, *"local".toByteArray().toTypedArray(),
+            15, *"_companion-link".toByteArray(),
+            4, *"_tcp".toByteArray(),
+            5, *"local".toByteArray(),
             0,
             0, 12, // PTR
             0x80.toByte(), 1, // IN with the QU bit

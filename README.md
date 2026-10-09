@@ -1,72 +1,192 @@
-# light-sdk
-or: a tool for building Tools
+# BrightRemote Lite
 
-## tl;dr
-This repository contains the scaffolding for building simple tools for the Light Phone III. Included are a library ([:sdk:client](./sdk/client)) and placeholder application ([:tool](./tool)) that depends on it. To create a tool that is fully compatible with LightOS, you must write your application code within the `tool` module, using the primitives provided by the sdk client library.
+An Apple TV remote for the Light Phone III, built as an official Light SDK tool. Launcher label
+**BrightRemote Lite**, tool id `com.gios.brightremotelite`.
 
-You can and should use current Android best practices: Kotlin for all source code, Compose for UI, Coroutines for async programming, and MVVM architecture. **Although this is appears to be a fairly standard Android dev environment, you will quickly find out that we are (gently but broadly) restricting which Android APIs and third-party libraries can be used. This is in an effort to provide a secure and distinctly _light_ experience for our users. These restrictions are _not_ set in stone and should ease up over time. If there is a stable, open-source library that you'd like us to allow, please let us know! More on this later.**
+This is the SDK-compatible cut of [BrightRemote](https://github.com/gi-os/BrightRemote), a
+sideloaded app. Both speak Apple's Companion protocol directly: no server, no bridge, no app on
+another device. The phone opens a TCP connection to the Apple TV, pairs with the four-digit code
+the TV shows, and from then on sends encrypted button, touch, app and text commands. The protocol
+stack was hand-ported to Kotlin from [pyatv](https://github.com/postlund/pyatv) for the original,
+and it carries over here almost line for line.
 
-## IMPORTANT!! July 1, 2026 Update
-If you're reading this, welcome! You're early! (in a cool way)
-This repo is a work-in-progress and will remain so for a while. Things are going to change _fast_ in the coming weeks. If you're going to start building right away, be sure to `git pull` frequently.
-Before you do, though, please be aware that **while we feel good about letting everybody start to explore and build, we are still working on the infrastructure to properly deploy your new tools.**
-The currently builds of LightOS in the wild are not yet ready to "play nice" with the tools built here. If you're someone who's already comfortable working with ADB to sideload APKs on your
-Light Phone III, you can totally do that with whatever you do here! But we're shooting to make these tools feel as seamless as the ones already available in LightOS, and that's going to take a bit more work. 
-We're hoping to have an update on that front later this month. In the meantime, the best way to start working is to use an Android emulator running our new [LightOS Emulator](sdk/emulator). The instructions for getting that up and running
-are [right here](docs/system_app).
+## What it does
 
-## Quickstart
+**The touchpad.** Nearly the whole panel is the surface you swipe on, with nothing drawn on it.
+Swipe to move the tvOS focus, tap to select. Nothing goes to the TV until your finger passes the
+touch slop, so a tap that wobbles is still a tap. Drags are scaled to half the TV's touch surface
+(a full-panel drag on a 1:1 mapping reads as a flick), throttled to one sample per 16 ms, and sent
+in order through a single queue so the TV never sees the finger jump backwards.
 
-### Running your Tool
-**You can test your tool on any Android device or emulator**, but certain functionality (receiving push notifications, requesting special permissions) can only be tested with:
-A) Real Light Phone hardware running LightOS
-B) An Android emulator (on your computer) set up to run our LightOS emulator app as a _system app_ ([see advanced instructions](docs/system_app))
+**The buttons.** Back, Home and More along the bottom. Holding Home opens Control Centre; holding
+More jumps straight to typing. More slides up a drawer with skip back and forward 15 seconds,
+play/pause, volume down, mute and volume up, a switch between the touchpad and a D-pad, the wheel
+axis, Apps and Type. Playback buttons dim when the TV reports no media controls. Mute is volume
+zero with the old level remembered, because Companion has no mute command; it only works on a TV
+that reports volume control.
 
-You can quickly [create an emulator](https://developer.android.com/studio/run/managing-avds) that generally feels like an LPIII by using the following settings:
-* 1080 X 1240, 3.92" display
-* Android API 34
-* NO Google Play Services installed
+**Power** sits top right and is held for three seconds, with a vibration that climbs while you
+hold and a firm pulse when it fires. Letting go early cancels it. The icon is lit when the TV is
+on.
 
-### Start Building
-1. Fork and/or clone this repository into your local dev environment.
-2. Install Android Studio and open this project within it. (IntelliJ IDEA should also work)
+**The wheel** walks the tvOS focus: two notches per row, at most one step every 110 ms, each
+step waiting for the previous press to finish. A stray reversed notch mid-turn is ignored; three
+in a row count as a real change of direction. The axis (up/down or left/right) is a toggle in the
+drawer. On the TV list and the app list the wheel scrolls the list instead.
 
-3. Edit the code in `HomeScreen` and `HomeScreenViewModel` to get started. `Homescreen` surfaces a `@Composable` method named `Content`. This is the UI that is shown when the tool first boots. You'll notice this UI sources data from it's `viewModel` field, which is an instance of `HomeScreenViewModel`. Edit that class with your screen's logic and expose the data to the UI using either Compose `State` or Coroutine `Flow`s. If you want to create a new screen, create a new Screen/ViewModel pair: your screen should extend from `LightScreen` and your VM from `LightScreenViewModel`. Your screen implementation will need:
-   1. A direct reference to your ViewModel's class type
-   2. A factory method for creating a new instance of your ViewModel.
+**The volume rocker** drives the TV's volume while a TV is connected and the remote is on screen.
+Otherwise the phone keeps it.
 
-Look at `HomeScreen` as an example for how this is done. To navigate to your new screen, use the `navigateTo` function built into `LightScreen` - just pass it a lambda to create an instance of your new screen. Note that the `LightScreen` constructor takes in a `SealedLightActivity`. The lambda is provided an instance of this as a default parameter.
+**Apps** lists what the TV can launch, with pins at the top. Tap one to open it on the TV.
 
-Since LightOS does not use Android system navigation, we provide a back button for you. As long as you use `navigateTo` to move between screens, our back button should work great. If need be, you can override the `onBackPressed` method in your `LightViewModel`.
+**Type** sends text to the focused field on the TV using the Light keyboard. SEND appends,
+REPLACE clears the field first. The top line shows what is in the TV's field.
 
-### Submitting Your Tool
-Given our relatively limited resources and desire to keep our users safe, we're requiring that all community tools be open source (including our own!). 
-Tools are built and signed directly from a publicly available git commit, and we'll be archiving the source at build time.
-You're free to build and share privately, but LightOS won't let you install tools that are not signed by us without acknowledging privacy and performance risks.
-We won't block users from performing these "dangerous" sideloads, but we're not going to encourage it either. 
-Using the Dashboard, developers are able to queue up a build of your tool on our servers, and if it follows our guidelines and compiles cleanly, we will hand you back a signed, shareable APK.
+**Now playing.** On tvOS 18 and later the TV pushes the position of what is playing, and a thin
+bar under the top row shows how far in you are.
 
-1. Review the [Tool Guidelines](TOOL_GUIDELINES.md) to get a sense of the kind of tools we're hoping to showcase.
-2. Ensure your tool is built with the latest Light SDK version and is accessible via a public Github repo.
-3. Enable developer mode on the [dashboard](https://dashboard.thelightphone.com/): Settings -> Account -> Developer Account.
-4. From there, you can create your tool: Settings -> Account -> Developer Account -> Manage Custom Tools -> Submit New Tool:
-  - The package name is unique for all tools and can't be changed later. It is pulled from the default branch of the Github repo submitted upon registering the tool.
-  - You'll then have the opportunity to add images. You can add them later on as well, but we'll require at least one for a tool to be approved.
-5. Now go in the tool detail page and press "submit build":
-  - Enter the git ref of the version of the tool to be built and a small description of the changelog.
-  - If your tool already has an active build, you won't be able to submit another.
-  - The `versionCode` of the submitted build should be higher than the one of the last version listed in the Tool page.
-6. Wait for the build to finish:
-  - In case of an error, use the "view details" button on the "Builds" section of the Tool page to check the error message. The "retry build" can be used to re-attempt building from the same git ref if necessary.
-  - If you believe the build error is due to an issue on our end (e.g. with light-sdk or our infrastructure), please feel free to open an Issue on this repo!
-  - In case of success, the "download apk" button should appear. A new "Version" entry will be created with "pending approval" status.
-7. Our team will review the builds and reach out to you via e-mail if we have any feedback regarding the approval process.
-8. If you have any questions, please e-mail us at tools@thelightphone.com
+**Connecting.** The tool reconnects to the last TV when it opens and whenever it comes back on
+screen. A failed connect is tried three times with a doubling delay, because a TV that just
+dropped a session refuses pair-verify for a moment. If nothing answers at the stored address, the
+tool searches for the TV by name once and retries at the new address (DHCP leases move). A link
+the TV drops on its own is picked back up twice before the tool says so.
 
-### Sharing Your Tool
-Once we release a version of LightOS that supports community tools, users will have an option to choose what kind of tools they want to be able to run on their device:
-- **Light-approved tools**: These include tools that are either built internally by the Light team, or built by the community and officially tested/signed-off by the Light team. We don't know _exactly_ what that sign-off process is going to look like, but as a heads-up: we're going to be looking pretty hard at whether a submitted tool matches the Light ethos both functionally and aesthetically. We've included a UX/UI library to make this as easy as possible! From a technical standpoint, these approved tools are both signed by us _and_ added to an "allow-list" within LightOS. Phones with this option selected will only install and display tools that meet both criteria.
-- **SDK-built tools**: This is a slightly more permissive choice. Phones with this option selected will install and launch any tool that was built and signed by Light. These don't require any manual approval by us (although we can block them in extreme cases). If a user wants to be able to install a tool that was shared locally or somewhere outside of Light's dashboard, but they still want to be confident that it will run well and integrate nicely with LightOS, they might choose this option.
-- **Any tools**: A user will have the option to make any APK launchable from LightOS, but they will own the responsibility of getting them installed/uninstalled. When a user selects this option, we will warn them that they are potentially opening their device up to security risks, and that doing so will limit our ability to support them if something goes wrong.
+## Finding the TV
 
-## [Complete Documentation](./docs)
+The full app used Android's `NsdManager` and a Wi-Fi `MulticastLock`. Both live behind
+`getSystemService`, which the SDK blocks. So this tool sends its own mDNS query:
+
+- One UDP datagram from an ordinary ephemeral port to `224.0.0.251:5353`, asking for
+  `_companion-link._tcp.local` with the unicast-response bit set. A query that does not come from
+  port 5353 is a "legacy unicast" query (RFC 6762, section 6.7), and the TV answers it directly to
+  the sending port. The reply is plain unicast UDP, so no multicast lock is needed.
+- The PTR, SRV, TXT and A records are parsed by `discovery/Mdns.kt`, a small pure-Kotlin DNS
+  reader with tests. If a reply leaves something out, the tool asks for just that.
+- A search is a five-second burst with three queries. It runs when you open the TV list or tap
+  SEARCH, never in the background.
+
+Some networks block this entirely: guest and IoT networks with client isolation, some mesh
+systems, routers that filter multicast. For those, **ADDRESS** takes the TV's IP from
+Settings > General > About. With no port, the tool asks the TV itself for its Companion port
+(a unicast mDNS question to the TV's port 5353). If that also goes unanswered, type the port
+after a colon, for example `192.168.1.20:49153`.
+
+Pairing has to be allowed on the TV (Settings > AirPlay and HomeKit). A TV with it off is listed
+but cannot be tapped.
+
+## Protocol layer
+
+Everything under `crypto/`, `proto/` and `companion/` is ported from BrightRemote with only the
+package name and logging changed. It uses nothing beyond the JDK.
+
+| Piece | File |
+| --- | --- |
+| OPACK, including the back-reference table | `proto/Opack.kt` |
+| TLV8 | `proto/Tlv8.kt` |
+| Binary property lists | `proto/BPlist.kt` |
+| NSKeyedArchiver payloads for text input and now playing | `proto/RtiPayloads.kt`, `proto/NowPlaying.kt` |
+| SRP-6a, 3072-bit, SHA-512 | `crypto/Srp.kt` |
+| Ed25519, X25519 | `crypto/Curve25519.kt` |
+| ChaCha20-Poly1305 | `crypto/ChaCha20Poly1305.kt` |
+| HKDF-SHA512 | `crypto/Digest.kt` |
+| Framing, request matching, pairing, commands | `companion/` |
+
+The crypto did not need to move onto BouncyCastle. It is pure Kotlin over `BigInteger`,
+`MessageDigest` and `Mac`, all of which a tool may use. Shipping BouncyCastle (about 8 MB) for a
+dozen operations per pairing would not buy anything. `Curve25519.kt` is not constant time; the
+only secrets are an ephemeral X25519 key and a long-term Ed25519 key used against a TV on the
+local network.
+
+How it is checked with no Apple TV in CI:
+
+1. **Golden vectors** (`tool/src/test/resources/vectors.properties`), generated in the original
+   repo from the libraries pyatv itself uses (pyatv's `opack.py` and `hap_tlv8.py`, `srptools`,
+   `cryptography`). The Ed25519 and X25519 vectors also reproduce RFC 8032 and RFC 7748.
+2. **A fake Apple TV** (`FakeAppleTv.kt`) that implements the device side of the handshake.
+   `HandshakeTest` drives the real client against it over a loopback socket: pair, drop,
+   reconnect with saved credentials, send encrypted commands.
+3. **BouncyCastle cross-checks** (`BouncyCastleCrossCheckTest.kt`). BouncyCastle is on the SDK
+   allowlist, so it is a test-only dependency here. Ed25519 keys and signatures, X25519
+   agreement, ChaCha20-Poly1305 and HKDF-SHA512 are compared on seeded random inputs, and the
+   SRP-6a shared secret is checked against BouncyCastle's SRP server.
+
+## Storage
+
+Pairing credentials hold the Ed25519 key the TV trusts. They are sealed with AES-256-GCM under a
+key kept in the Android Keystore (`java.security.KeyStore`, alias
+`brightremotelite.credentials`) and the sealed blob is written to the tool's DataStore. If the
+tool's data were restored onto another phone, the key would not come with it and the TV would
+show as unpaired, which is the intended result. The client identity, the last TV, pinned apps and
+the touchpad and wheel settings are stored in plain DataStore preferences.
+
+## What was dropped, and why
+
+| Feature in BrightRemote | Why it is not here |
+| --- | --- |
+| Now-playing title and artwork (MRP over an AirPlay 2 tunnel, with a second AirPlay pairing) | Large second protocol stack, kept out of a lite cut. The progress bar from Companion's own `NowPlayingInfo` push is kept. |
+| Media session and lock-screen controls | Needs `MediaSession` wired to a foreground service and a notification. The SDK exposes no notification API and blocks `startService`. |
+| Keeping the link up in the background | Needs a foreground service (`startService`, `android.app.*`), which the SDK blocks. The tool reconnects when it comes back on screen instead. |
+| `NsdManager` discovery with a `MulticastLock` | Both come from `getSystemService`, which is blocked. Replaced by the unicast-reply mDNS query above. |
+| Reconnecting the moment the network comes back | Needs a `ConnectivityManager` callback started by the app. Reconnecting on return to the screen covers the same case when you pick the phone up. |
+| BrightNotebook "watched" log and its content provider | Exposing data to another app needs a `ContentProvider`, which is blocked. |
+| Shake to report, and automatic reports when the link drops | Needs `SensorManager` from `getSystemService`, and the reporter lives in Gio's `light-common` library, which is not on the allowlist. |
+| Backup and restore of pairings | Built on `light-common`'s sync backup, which is not on the allowlist. Pairing again takes a few seconds. |
+| BrightControl integration for the wheel click and camera key | Belongs to a separate accessibility-service app, not something a tool can talk to. |
+
+## Network hosts
+
+The tool talks only to devices on your local network:
+
+- `224.0.0.251` UDP port 5353 (mDNS), when you search for TVs.
+- Your Apple TV: UDP port 5353 when you add it by address, and TCP on its Companion port
+  (usually 49152 or 49153) for the remote itself.
+
+There is no internet traffic, no analytics and no crash reporting. `INTERNET` is the Android
+permission that covers any socket, including local ones.
+
+## Build
+
+You need JDK 17 and the Android SDK (platform 36).
+
+```sh
+./gradlew -DlightSdk.toolOnly=true :tool:assembleDebug
+./gradlew -DlightSdk.toolOnly=true :tool:testDebugUnitTest :tool:lintDebug
+```
+
+CI (`.github/workflows/build-tool.yml`) runs the tests, lint and the debug build on every push,
+with the same flags as Light's tool builder. It publishes nothing.
+
+To install on a phone or emulator running the Light SDK server, see `./gradlew :tool:uploadTool`
+in `tool/build.gradle.kts`.
+
+## Permissions
+
+- `INTERNET`, for the TCP connection to the TV and the mDNS query.
+- `ACCESS_NETWORK_STATE`, declared for network checks. Nothing else.
+
+No cleartext-HTTP capability is requested: Companion is a binary TCP protocol, not HTTP.
+
+## Tool Library submission notes
+
+- The tool id, label and version are in `tool/lighttool.toml`. Bump `versionCode` for every
+  submission.
+- Everything is in the `tool` module. `sdk/`, `plugin/` and `lint-rules/` are upstream and
+  unmodified, so this repository can be rebased onto
+  [lightphone/light-sdk](https://github.com/lightphone/light-sdk).
+- Runtime dependencies are only the SDK and what it brings (Compose, coroutines, DataStore).
+  BouncyCastle is used in tests only.
+- No reflection, no blocked imports, no custom manifest, no background work. Nothing refreshes on
+  its own: a search runs when asked, and the app list loads when you open it.
+
+## Not verified on hardware
+
+The protocol is verified against vectors and a fake accessory, not a real Apple TV, from inside
+this repository. The original app does run against real TVs. Things only a device can confirm:
+that LightOS delivers the legacy-unicast mDNS replies to a tool, the Keystore key creation on the
+LP3, and how the SDK's back handling feels with the remote as the first screen.
+
+## Credits
+
+Built on [lightphone/light-sdk](https://github.com/lightphone/light-sdk) (MIT); see `LICENSE`.
+The Companion protocol code is ported from [gi-os/BrightRemote](https://github.com/gi-os/BrightRemote)
+(MIT), which was written against [pyatv](https://github.com/postlund/pyatv) (MIT) as the reference.
