@@ -1,8 +1,8 @@
 [tool]
 id = "com.gios.brightremotelite"
-label = "BrightRemote Lite"
-versionCode = 1
-versionName = "0.1.0"
+label = "Remote"
+versionCode = 2
+versionName = "0.1.1"
 permissions = ["android.permission.INTERNET", "android.permission.ACCESS_NETWORK_STATE"]
 capabilities = []
 orientation = "portrait"
