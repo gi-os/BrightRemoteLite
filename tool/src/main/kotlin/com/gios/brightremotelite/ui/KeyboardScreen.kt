@@ -54,7 +54,7 @@ class KeyboardScreen(sealedActivity: SealedLightActivity) : SimpleLightScreen<Un
                 modifier = Modifier.background(LightThemeTokens.colors.background),
                 submitLabel = "SEND",
                 singleLine = true,
-                rightBottomBarItem = LightBarButton.Text(text = "REPLACE", onClick = {
+                rightBottomBarItem = LightBarButton.Text(text = "SET", onClick = {
                     Remote.sendText(text.text.toString(), replace = true)
                     text.clearText()
                 }),
