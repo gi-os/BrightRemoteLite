@@ -71,7 +71,11 @@ class AddressScreen(sealedActivity: SealedLightActivity) : SimpleLightScreen<Boo
                         lighten = text.isEmpty(),
                     )
                     LightText(
-                        text = message ?: "The TV's IP is in Settings > General > About. A port is optional.",
+                        text = message ?: if (text.isNotEmpty() && !plausible) {
+                            "Enter four numbers from 0 to 255, like 192.168.1.20."
+                        } else {
+                            "The TV's IP is in Settings > General > About. A port is optional."
+                        },
                         variant = LightTextVariant.Detail,
                         lighten = true,
                         modifier = Modifier.padding(top = 0.5f.gridUnitsAsDp()),

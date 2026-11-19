@@ -3,12 +3,21 @@ package com.gios.brightremotelite.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.padding
 import com.gios.brightremotelite.app.ConnectionState
 import com.gios.brightremotelite.app.Remote
+import com.gios.brightremotelite.data.PairedDevice
 import com.gios.brightremotelite.discovery.DiscoveredDevice
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.SealedLightActivity
 import com.thelightphone.sdk.ui.LightBarButton
+import com.thelightphone.sdk.ui.LightText
+import com.thelightphone.sdk.ui.LightTextVariant
+import com.thelightphone.sdk.ui.gridUnitsAsDp
 
 class DevicesViewModel : WheelViewModel<Unit>()
 
@@ -37,6 +46,28 @@ class DevicesScreen(sealedActivity: SealedLightActivity) :
     @Composable
     override fun Content() {
         val state by Remote.state.collectAsState()
+        var forgetting by remember { mutableStateOf<PairedDevice?>(null) }
+        forgetting?.let { device ->
+            Page(
+                title = null,
+                left = backButton { forgetting = null },
+                bottom = listOf(
+                    LightBarButton.Text(text = "CANCEL", onClick = { forgetting = null }),
+                    LightBarButton.Text(text = "FORGET", onClick = {
+                        Remote.forget(device)
+                        forgetting = null
+                    }),
+                ),
+            ) {
+                LightText(
+                    text = "Forget ${device.name}?",
+                    variant = LightTextVariant.Copy,
+                    modifier = Modifier.padding(top = 1f.gridUnitsAsDp()),
+                )
+                Note("Pairing it again needs a new PIN.")
+            }
+            return
+        }
         Page(
             title = "Apple TVs",
             left = backButton { goBack() },
@@ -64,7 +95,7 @@ class DevicesScreen(sealedActivity: SealedLightActivity) :
                         title = device.name,
                         detail = listOfNotNull(status, "${device.host}:${device.port}").joinToString(" · "),
                         action = "FORGET",
-                        onAction = { Remote.forget(device) },
+                        onAction = { forgetting = device },
                         onClick = {
                             Remote.connect(device, byHand = true)
                             goBack()
