@@ -475,21 +475,24 @@ object Remote {
         }
     }
 
-    fun sendText(text: String, replace: Boolean) {
+    /** True when the TV took the text. On false the caller keeps what was typed. */
+    suspend fun sendText(text: String, replace: Boolean): Boolean {
         _state.update { it.copy(error = null) }
-        scope.launch {
-            val client = ready.await()
-            runCatching { client.typeText(text, clearFirst = replace) }
-                .onSuccess { updated ->
-                    _state.update {
-                        it.copy(
-                            fieldText = updated,
-                            error = if (updated == null) "No text field is focused on the Apple TV" else null,
-                        )
-                    }
-                }
-                .onFailure { error -> _state.update { it.copy(error = error.friendlyMessage()) } }
+        val client = ready.await()
+        val result = runCatching { client.typeText(text, clearFirst = replace) }
+        result.exceptionOrNull()?.let { error ->
+            if (error is CancellationException) throw error
+            _state.update { it.copy(error = error.friendlyMessage()) }
+            return false
         }
+        val updated = result.getOrNull()
+        _state.update {
+            it.copy(
+                fieldText = updated,
+                error = if (updated == null) "Open a text field on the TV, then try again." else null,
+            )
+        }
+        return updated != null
     }
 
     fun setPreferTouchpad(value: Boolean) {

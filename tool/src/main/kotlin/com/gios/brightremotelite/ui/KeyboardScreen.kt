@@ -7,6 +7,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.gios.brightremotelite.app.Remote
 import com.thelightphone.sdk.SealedLightActivity
@@ -15,6 +19,7 @@ import com.thelightphone.sdk.rememberKeyboardOptions
 import com.thelightphone.sdk.ui.LightBarButton
 import com.thelightphone.sdk.ui.LightTextInputEditor
 import com.thelightphone.sdk.ui.LightThemeTokens
+import kotlinx.coroutines.launch
 
 /**
  * Type into whatever field is focused on the TV, with the Light keyboard.
@@ -30,6 +35,22 @@ class KeyboardScreen(sealedActivity: SealedLightActivity) : SimpleLightScreen<Un
         val remote by Remote.state.collectAsState()
         val keyboardOptions = rememberKeyboardOptions()
         val text = rememberTextFieldState()
+        val scope = rememberCoroutineScope()
+        var sending by remember { mutableStateOf(false) }
+
+        // The field is cleared only once the TV has taken the text, and only if nothing new was
+        // typed meanwhile. One send at a time, so a second tap can't type it on the TV twice.
+        fun send(typed: String, replace: Boolean) {
+            if (sending) return
+            sending = true
+            scope.launch {
+                try {
+                    if (Remote.sendText(typed, replace) && text.text.toString() == typed) text.clearText()
+                } finally {
+                    sending = false
+                }
+            }
+        }
 
         LaunchedEffect(Unit) { Remote.loadFieldText() }
 
@@ -44,10 +65,7 @@ class KeyboardScreen(sealedActivity: SealedLightActivity) : SimpleLightScreen<Un
                 title = title,
                 state = text,
                 onSubmit = { typed ->
-                    if (typed.isNotEmpty()) {
-                        Remote.sendText(typed.toString(), replace = false)
-                        text.clearText()
-                    }
+                    if (typed.isNotEmpty()) send(typed.toString(), replace = false)
                 },
                 onBack = { goBack() },
                 keyboardOptionsFlow = keyboardOptions,
@@ -55,8 +73,7 @@ class KeyboardScreen(sealedActivity: SealedLightActivity) : SimpleLightScreen<Un
                 submitLabel = "SEND",
                 singleLine = true,
                 rightBottomBarItem = LightBarButton.Text(text = "SET", onClick = {
-                    Remote.sendText(text.text.toString(), replace = true)
-                    text.clearText()
+                    send(text.text.toString(), replace = true)
                 }),
             )
         }

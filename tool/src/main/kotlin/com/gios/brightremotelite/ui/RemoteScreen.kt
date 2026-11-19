@@ -161,14 +161,24 @@ class RemoteScreen(private val sealedActivity: SealedLightActivity) :
     override fun Content() {
         val state by Remote.state.collectAsState()
         var showMore by remember { mutableStateOf(false) }
+        var hint by remember { mutableStateOf<String?>(null) }
+        LaunchedEffect(hint) {
+            if (hint != null) {
+                delay(2_000)
+                hint = null
+            }
+        }
         val connected = state.connection == ConnectionState.Connected
         val vibrator = sealedActivity.vibrator
 
         Themed {
             Column(Modifier.fillMaxSize()) {
-                TopRow(state, vibrator, onDevices = ::openDevices)
+                TopRow(state, vibrator, onDevices = ::openDevices, onPowerHint = { hint = it })
                 NowPlayingBar(state.nowPlaying)
-                Banner(state.error ?: state.status) { Remote.dismissError() }
+                Banner(state.error ?: hint ?: state.status) {
+                    hint = null
+                    Remote.dismissError()
+                }
 
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     when (state.connection) {
@@ -200,7 +210,12 @@ class RemoteScreen(private val sealedActivity: SealedLightActivity) :
 }
 
 @Composable
-private fun TopRow(state: RemoteState, vibrator: LightVibrator, onDevices: () -> Unit) {
+private fun TopRow(
+    state: RemoteState,
+    vibrator: LightVibrator,
+    onDevices: () -> Unit,
+    onPowerHint: (String) -> Unit,
+) {
     val connected = state.connection == ConnectionState.Connected
     Row(
         modifier = Modifier
@@ -209,11 +224,15 @@ private fun TopRow(state: RemoteState, vibrator: LightVibrator, onDevices: () ->
             .padding(horizontal = 1f.gridUnitsAsDp()),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        LightText(
-            text = "TVs",
-            variant = LightTextVariant.Fine,
-            modifier = Modifier.lightClickable(onClick = onDevices).padding(vertical = 1f.gridUnitsAsDp()),
-        )
+        Box(
+            modifier = Modifier
+                .height(4f.gridUnitsAsDp())
+                .lightClickable(onClick = onDevices)
+                .padding(end = 1f.gridUnitsAsDp()),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            LightText(text = "TVs", variant = LightTextVariant.Detail)
+        }
         LightText(
             text = state.activeName ?: "",
             variant = LightTextVariant.Fine,
@@ -227,6 +246,7 @@ private fun TopRow(state: RemoteState, vibrator: LightVibrator, onDevices: () ->
             enabled = connected,
             lit = state.power == PowerState.On || state.power == PowerState.Screensaver,
             vibrator = vibrator,
+            onShortTap = { onPowerHint(if (state.power == PowerState.Off) "Hold to turn on" else "Hold to turn off") },
         )
     }
 }
@@ -238,9 +258,10 @@ private fun TopRow(state: RemoteState, vibrator: LightVibrator, onDevices: () ->
  * firm pulse when it fires.
  */
 @Composable
-private fun PowerButton(enabled: Boolean, lit: Boolean, vibrator: LightVibrator) {
+private fun PowerButton(enabled: Boolean, lit: Boolean, vibrator: LightVibrator, onShortTap: () -> Unit) {
     val scope = rememberCoroutineScope()
     val active by rememberUpdatedState(enabled)
+    val shortTap by rememberUpdatedState(onShortTap)
     Box(
         modifier = Modifier
             .size(3f.gridUnitsAsDp())
@@ -258,6 +279,7 @@ private fun PowerButton(enabled: Boolean, lit: Boolean, vibrator: LightVibrator)
                     if (fire.isActive) {
                         fire.cancel()
                         vibrator.cancel()
+                        shortTap()
                     }
                 }
             },
@@ -331,7 +353,7 @@ private const val TOUCH_INTERVAL_MS = 16L
 @Composable
 private fun Touchpad(vibrator: LightVibrator, modifier: Modifier) {
     Box(
-        modifier
+        modifier = modifier
             .pointerInput(Unit) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
@@ -384,7 +406,16 @@ private fun Touchpad(vibrator: LightVibrator, modifier: Modifier) {
                     }
                 }
             },
-    )
+        contentAlignment = Alignment.Center,
+    ) {
+        LightText(
+            text = "Swipe to move. Tap to select.",
+            variant = LightTextVariant.Detail,
+            lighten = true,
+            align = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 2f.gridUnitsAsDp()),
+        )
+    }
 }
 
 /**
@@ -470,10 +501,9 @@ private fun MorePanel(state: RemoteState, onApps: () -> Unit, onKeyboard: () -> 
             PanelIcon(R.drawable.rl_volume_up_white, "Volume up") { Remote.volumeUp() }
         }
         PanelRow {
-            PanelIcon(
-                if (state.preferTouchpad) R.drawable.rl_dpad_white else R.drawable.rl_trackpad_white,
-                if (state.preferTouchpad) "Switch to D-pad" else "Switch to touchpad",
-            ) { Remote.setPreferTouchpad(!state.preferTouchpad) }
+            PanelLabel(if (state.preferTouchpad) "D-pad" else "Touchpad") {
+                Remote.setPreferTouchpad(!state.preferTouchpad)
+            }
             PanelIcon(
                 if (state.wheelHorizontal) R.drawable.rl_wheel_horizontal_white else R.drawable.rl_wheel_vertical_white,
                 if (state.wheelHorizontal) "Wheel moves sideways, tap for up and down" else "Wheel moves up and down, tap for sideways",
@@ -491,6 +521,16 @@ private fun PanelRow(content: @Composable () -> Unit) {
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) { content() }
+}
+
+@Composable
+private fun PanelLabel(text: String, onClick: () -> Unit) {
+    Box(
+        Modifier.height(4f.gridUnitsAsDp()).lightClickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        LightText(text = text, variant = LightTextVariant.Detail, maxLines = 1)
+    }
 }
 
 @Composable
